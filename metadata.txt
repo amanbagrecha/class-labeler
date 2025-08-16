@@ -1,0 +1,7 @@
+[general]
+name=Class Labeler
+qgisMinimumVersion=3.0
+description=Dynamic class management with hotkeys for labeling
+version=1.0
+author=Aman Bagrecha
+email=amanbagrecha.blr@gmail.com
