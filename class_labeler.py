@@ -1,21 +1,40 @@
-from qgis.PyQt.QtWidgets import (QAction, QDialog, QVBoxLayout, QHBoxLayout, 
+from qgis.PyQt.QtWidgets import (QAction, QWidget, QVBoxLayout, QHBoxLayout, 
                                   QPushButton, QLineEdit, QLabel, QListWidget, 
-                                  QListWidgetItem, QFileDialog, QMessageBox)
-from qgis.PyQt.QtCore import Qt
+                                  QListWidgetItem, QComboBox, QMessageBox, QToolButton,
+                                  QSizePolicy, QFrame)
+from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QIcon, QKeySequence
-from qgis.core import QgsProject, QgsDefaultValue, QgsSettings, QgsVectorLayer, QgsEditFormConfig
+from qgis.core import (QgsProject, QgsDefaultValue, QgsSettings, QgsVectorLayer, 
+                      QgsEditFormConfig, QgsField, QgsMapLayerProxyModel)
+from qgis.gui import QgsMapLayerComboBox, QgsDockWidget
 from qgis.utils import iface
 import os
+
+# Import brush tool classes
+try:
+    from .drawmybrush import DrawByBrush
+    BRUSH_AVAILABLE = True
+    
+except ImportError as e:
+    BRUSH_AVAILABLE = False
+    
+
 
 class ClassLabelerPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.classes = []
         self.actions = []
+        self.class_field = "class"
+        self.active_class_index = 0
+        self.dock_widget = None
+        self.current_layer = None
+        self.brush_tool = None
+
+        # self.iface.messageBar().pushWarning("Class Labeler", f"{BRUSH_AVAILABLE=}")
         
     def refresh_toolbar(self):
         if getattr(self, "toolbar", None):
-            # adjust & rebuild
             if self.active_class_index >= len(self.classes):
                 self.active_class_index = max(0, len(self.classes) - 1)
             self.create_toolbar()
@@ -23,19 +42,25 @@ class ClassLabelerPlugin:
                 self.set_default_class(self.classes[self.active_class_index])
             return
 
-        # If there is no toolbar, do NOT clear self.dialog here.
-        # Optionally keep indices sane:
         self.active_class_index = min(self.active_class_index, max(0, len(self.classes) - 1))
-
         
+    def current_class_value(self):
+        """Get the current active class value."""
+        if self.classes and 0 <= self.active_class_index < len(self.classes):
+            return self.classes[self.active_class_index]
+        return None
+        
+    def current_class_field(self):
+        """Get the current class field name."""
+        return self.class_field
+
     def initGui(self):
         icon = QIcon()
         self.action = QAction(icon, "Class Labeler", self.iface.mainWindow())
-        self.action.triggered.connect(self.run)
+        self.action.triggered.connect(self.show_dock)
         self.iface.addToolBarIcon(self.action)
         
     def unload(self):
-        # Disconnect signals
         try:
             QgsProject.instance().layersRemoved.disconnect(self.on_layers_removed)
         except:
@@ -43,6 +68,8 @@ class ClassLabelerPlugin:
         self.cleanup_toolbar()
         if hasattr(self, 'action') and self.action:
             self.iface.removeToolBarIcon(self.action)
+        if self.dock_widget:
+            self.iface.removeDockWidget(self.dock_widget)
             
     def cleanup_toolbar(self):
         if hasattr(self, 'toolbar') and self.toolbar:
@@ -50,18 +77,16 @@ class ClassLabelerPlugin:
             self.toolbar = None
         if hasattr(self, 'actions'):
             self.actions = []
-        
-    def run(self):
-        # Ensure attributes exist
-        if not hasattr(self, 'classes'):
-            self.classes = []
-        if not hasattr(self, 'class_field'):
-            self.class_field = "class"
-        if not hasattr(self, 'active_class_index'):
-            self.active_class_index = 0
+        # Clean up brush tool
+        if hasattr(self, 'brush_tool') and self.brush_tool:
+            self.brush_tool = None
             
-        self.dialog = ClassConfigDialog(self)
-        self.dialog.show()
+    def show_dock(self):
+        if not self.dock_widget:
+            self.dock_widget = ClassLabelerDockWidget(self)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
+        else:
+            self.dock_widget.show()
         
     def create_toolbar(self):
         self.cleanup_toolbar()
@@ -83,36 +108,43 @@ class ClassLabelerPlugin:
             self.actions.append(action)
             
         self.update_active_button()
+        
+        # Initialize brush tool with class labeler integration
+        if BRUSH_AVAILABLE:
+            self.brush_tool = DrawByBrush(
+                self.iface,
+                class_value_getter=self.current_class_value,
+                class_field_getter=self.current_class_field
+            )
+            self.brush_tool.initGui()
             
     def set_default_class_by_index(self, index):
         if 0 <= index < len(self.classes):
             self.active_class_index = index
             self.set_default_class(self.classes[index])
             self.update_active_button()
+            if self.dock_widget:
+                self.dock_widget.update_class_selection()
             
     def update_active_button(self):
         for i, action in enumerate(self.actions):
             action.setChecked(i == self.active_class_index)
             
     def set_default_class(self, value):
-        layer = self.get_active_layer()
+        layer = self.get_target_layer()
         if not layer:
-            # Layer no longer exists, cleanup toolbar
-            self.cleanup_toolbar()
-            self.current_layer = None
-            self.iface.messageBar().pushWarning("Class Labeler", "No valid layer - toolbar cleared")
+            self.iface.messageBar().pushWarning("Class Labeler", "No valid layer selected")
             return
             
         idx = layer.fields().indexFromName(self.class_field)
         if idx == -1:
             self.iface.messageBar().pushCritical("Class Labeler", 
-                f"Field '{self.class_field}' not found")
+                f"Field '{self.class_field}' not found. Create toolbar first.")
             return
             
         expr = f"'{value}'"
         layer.setDefaultValueDefinition(idx, QgsDefaultValue(expr))
         
-        # Force layer-specific form suppression
         form_config = layer.editFormConfig()
         form_config.setSuppress(QgsEditFormConfig.SuppressOn)
         layer.setEditFormConfig(form_config)
@@ -121,16 +153,12 @@ class ClassLabelerPlugin:
         self.iface.messageBar().pushInfo("Class Labeler", 
             f"Active class: {value}")
             
-    def get_active_layer(self):
-        layer = self.iface.activeLayer()
-        if not layer or not hasattr(layer, 'fields'):
-            self.iface.messageBar().pushWarning("Class Labeler", 
-                "Select a vector layer")
-            return None
-        return layer
+    def get_target_layer(self):
+        if self.current_layer and self.current_layer.isValid():
+            return self.current_layer
+        return None
 
     def set_target_layer(self, layer):
-        # disconnect old hook
         if getattr(self, "current_layer", None):
             try:
                 self.current_layer.willBeDeleted.disconnect(self.on_current_layer_deleted)
@@ -144,20 +172,13 @@ class ClassLabelerPlugin:
     def on_current_layer_deleted(self):
         self.cleanup_toolbar()
         self.current_layer = None
-
-        # Clear classes + selection state
         self.classes.clear()
         self.active_class_index = 0
 
-        # If the config dialog is open, clear its UI list too
-        if getattr(self, "dialog", None):
-            try:
-                self.dialog.class_list.clear()
-            except Exception:
-                pass
+        if self.dock_widget:
+            self.dock_widget.class_list.clear()  # Clear the UI list too
 
         self.iface.messageBar().pushInfo("Class Labeler", "Layer removed — toolbar & classes cleared")
-
 
     def apply_settings(self):
         s = QgsSettings()
@@ -166,76 +187,150 @@ class ClassLabelerPlugin:
         s.setValue("/qgis/digitizing/reuseLastValue", True)
         
     def on_layers_removed(self, layer_ids):
-        """Called when layers are removed from project"""
-        # If we have a toolbar and any layer is removed, check if we still have a valid target
-        if self.toolbar:
-            layer = self.get_active_layer()
-            if not layer:
-                self.cleanup_toolbar()
-                self.current_layer = None
-                self.iface.messageBar().pushInfo("Class Labeler", "Target layer removed - toolbar cleared")
+        if self.toolbar and self.current_layer and self.current_layer.id() in layer_ids:
+            self.cleanup_toolbar()
+            self.current_layer = None
+            self.classes.clear()
+            self.active_class_index = 0
+            if self.dock_widget:
+                self.dock_widget.class_list.clear()
+            self.iface.messageBar().pushInfo("Class Labeler", "Target layer removed - toolbar cleared")
 
-class ClassConfigDialog(QDialog):
+class ClassLabelerDockWidget(QgsDockWidget):
     def __init__(self, plugin):
-        super().__init__()
+        super().__init__("Class Labeler", plugin.iface.mainWindow())
         self.plugin = plugin
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("Class Labeler Configuration")
-        self.setMinimumWidth(400)
+        self.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea | Qt.BottomDockWidgetArea)
+        
+        widget = QWidget()
         layout = QVBoxLayout()
-        
-        # Class list
-        layout.addWidget(QLabel("Classes:"))
-        self.class_list = QListWidget()
-        layout.addWidget(self.class_list)
-        
-        # Load existing classes into the dialog
-        for class_name in self.plugin.classes:
-            self.class_list.addItem(class_name)
-        
-        # Add class section
-        add_layout = QHBoxLayout()
-        self.class_input = QLineEdit()
-        self.class_input.setPlaceholderText("Enter class name")
-        self.add_btn = QPushButton("Add Class")
-        self.add_btn.clicked.connect(self.add_class)
-        add_layout.addWidget(self.class_input)
-        add_layout.addWidget(self.add_btn)
-        layout.addLayout(add_layout)
-        
-        # Remove class
-        self.remove_btn = QPushButton("Remove Selected")
-        self.remove_btn.clicked.connect(self.remove_class)
-        layout.addWidget(self.remove_btn)
+        layout.setSpacing(6)
         
         # Layer selection
-        layout.addWidget(QLabel("Target Layer:"))
-        layer_layout = QHBoxLayout()
-        self.layer_btn = QPushButton("Select Layer File...")
-        self.layer_btn.clicked.connect(self.select_layer_file)
-        self.active_layer_btn = QPushButton("Use Active Layer")
-        self.active_layer_btn.clicked.connect(self.use_active_layer)
-        layer_layout.addWidget(self.layer_btn)
-        layer_layout.addWidget(self.active_layer_btn)
-        layout.addLayout(layer_layout)
+        layer_frame = QFrame()
+        layer_frame.setFrameStyle(QFrame.StyledPanel)
+        layer_layout = QVBoxLayout()
         
-        self.layer_label = QLabel("No layer selected")
-        layout.addWidget(self.layer_label)
+        layer_layout.addWidget(QLabel("Target Layer:"))
+        self.layer_combo = QgsMapLayerComboBox()
+        self.layer_combo.setFilters(QgsMapLayerProxyModel.VectorLayer)
+        self.layer_combo.layerChanged.connect(self.on_layer_changed)
+        layer_layout.addWidget(self.layer_combo)
         
-        # Apply button
+        layer_frame.setLayout(layer_layout)
+        layout.addWidget(layer_frame)
+        
+        # Field name input
+        field_frame = QFrame()
+        field_frame.setFrameStyle(QFrame.StyledPanel)
+        field_layout = QVBoxLayout()
+        
+        field_layout.addWidget(QLabel("Class Field Name:"))
+        self.field_input = QLineEdit()
+        self.field_input.setText(self.plugin.class_field)
+        self.field_input.textChanged.connect(self.on_field_changed)
+        field_layout.addWidget(self.field_input)
+        
+        field_frame.setLayout(field_layout)
+        layout.addWidget(field_frame)
+        
+        # Classes section
+        classes_frame = QFrame()
+        classes_frame.setFrameStyle(QFrame.StyledPanel)
+        classes_layout = QVBoxLayout()
+        
+        # Header with buttons
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel("Classes:"))
+        header_layout.addStretch()
+        
+        self.add_btn = QToolButton()
+        self.add_btn.setText("+")
+        self.add_btn.setToolTip("Add class")
+        self.add_btn.clicked.connect(self.add_class)
+        
+        self.remove_btn = QToolButton()
+        self.remove_btn.setText("-")
+        self.remove_btn.setToolTip("Remove selected class")
+        self.remove_btn.clicked.connect(self.remove_class)
+        
+        header_layout.addWidget(self.add_btn)
+        header_layout.addWidget(self.remove_btn)
+        classes_layout.addLayout(header_layout)
+        
+        # Class input
+        self.class_input = QLineEdit()
+        self.class_input.setPlaceholderText("Enter class name")
+        self.class_input.returnPressed.connect(self.add_class)
+        classes_layout.addWidget(self.class_input)
+        
+        # Class list
+        self.class_list = QListWidget()
+        self.class_list.itemClicked.connect(self.on_class_selected)
+        classes_layout.addWidget(self.class_list)
+        
+        classes_frame.setLayout(classes_layout)
+        layout.addWidget(classes_frame)
+        
+        # Control buttons
+        button_layout = QHBoxLayout()
+        
         self.apply_btn = QPushButton("Create Toolbar")
         self.apply_btn.clicked.connect(self.apply_config)
-        layout.addWidget(self.apply_btn)
         
-        # Clear toolbar button
         self.clear_btn = QPushButton("Clear Toolbar")
         self.clear_btn.clicked.connect(self.clear_toolbar)
-        layout.addWidget(self.clear_btn)
         
-        self.setLayout(layout)
-        self.class_input.returnPressed.connect(self.add_class)
+        button_layout.addWidget(self.apply_btn)
+        button_layout.addWidget(self.clear_btn)
+        layout.addLayout(button_layout)
+        
+        # Brush tool button (only show if available)
+        if BRUSH_AVAILABLE:
+            brush_layout = QHBoxLayout()
+            self.brush_btn = QPushButton("🖌️ Brush Tool")
+            self.brush_btn.setToolTip("Activate brush tool for drawing features with current class")
+            self.brush_btn.clicked.connect(self.activate_brush_tool)
+            self.brush_btn.setEnabled(False)  # Disabled until toolbar is created
+            brush_layout.addWidget(self.brush_btn)
+            layout.addLayout(brush_layout)
+        
+        layout.addStretch()
+        widget.setLayout(layout)
+        self.setWidget(widget)
+        
+        self.refresh_ui()
+        
+    def activate_brush_tool(self):
+        """Activate the brush tool with class labeler integration."""
+        if hasattr(self.plugin, 'brush_tool') and self.plugin.brush_tool:
+            # Activate the brush tool
+            self.plugin.brush_tool.activate_brush_tool()
+        else:
+            QMessageBox.warning(self, "Warning", "Brush tool not available. Create toolbar first.")
+        
+    def refresh_ui(self):
+        self.class_list.clear()
+        for class_name in self.plugin.classes:
+            self.class_list.addItem(class_name)
+        self.update_class_selection()
+        
+    def update_class_selection(self):
+        for i in range(self.class_list.count()):
+            item = self.class_list.item(i)
+            item.setSelected(i == self.plugin.active_class_index)
+            
+    def on_layer_changed(self, layer):
+        if layer and layer.isValid():
+            self.plugin.set_target_layer(layer)
+        else:
+            self.plugin.current_layer = None
+            
+    def on_field_changed(self, text):
+        self.plugin.class_field = text.strip() or "class"
         
     def add_class(self):
         class_name = self.class_input.text().strip()
@@ -259,37 +354,19 @@ class ClassConfigDialog(QDialog):
             self.class_list.takeItem(current_row)
             self.plugin.refresh_toolbar()
             
-    def select_layer_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Vector File", "", 
-            "Vector files (*.shp *.gpkg *.geojson *.kml);;All files (*.*)")
-        if file_path:
-            layer = QgsVectorLayer(file_path, os.path.basename(file_path), "ogr")
-            if layer.isValid():
-                QgsProject.instance().addMapLayer(layer)
-                self.iface.setActiveLayer(layer)
-                self.plugin.current_layer = layer
-                self.plugin.set_target_layer(layer)
-                self.layer_label.setText(f"Selected: {layer.name()}")
-            else:
-                QMessageBox.critical(self, "Error", "Invalid layer file")
-                
-    def use_active_layer(self):
-        layer = self.plugin.get_active_layer()
-        if layer:
-            self.plugin.current_layer = layer
-            self.plugin.set_target_layer(layer) 
-            self.layer_label.setText(f"Using: {layer.name()}")
-        else:
-            QMessageBox.warning(self, "Warning", "No active vector layer")
-            
+    def on_class_selected(self, item):
+        row = self.class_list.row(item)
+        if 0 <= row < len(self.plugin.classes):
+            self.plugin.active_class_index = row
+            # Only update UI selection, don't set default values
+            self.update_class_selection()
             
     def apply_config(self):
         if not self.plugin.classes:
             QMessageBox.warning(self, "Warning", "Add at least one class")
             return
             
-        layer = self.plugin.get_active_layer()
+        layer = self.plugin.get_target_layer()
         if not layer:
             QMessageBox.warning(self, "Warning", "Select a target layer")
             return
@@ -299,10 +376,17 @@ class ClassConfigDialog(QDialog):
             reply = QMessageBox.question(self, "Field Missing", 
                 f"Field '{self.plugin.class_field}' not found. Create it?")
             if reply == QMessageBox.Yes:
-                from qgis.core import QgsField
                 from qgis.PyQt.QtCore import QVariant
-                layer.dataProvider().addAttributes([QgsField(self.plugin.class_field, QVariant.String)])
+                field = QgsField(self.plugin.class_field, QVariant.String)
+                if not layer.dataProvider().addAttributes([field]):
+                    QMessageBox.critical(self, "Error", "Failed to add field. Layer may be read-only.")
+                    return
                 layer.updateFields()
+                
+                # Verify field was created
+                if layer.fields().indexFromName(self.plugin.class_field) == -1:
+                    QMessageBox.critical(self, "Error", f"Field '{self.plugin.class_field}' could not be created.")
+                    return
             else:
                 return
                 
@@ -312,13 +396,21 @@ class ClassConfigDialog(QDialog):
         if self.plugin.classes:
             self.plugin.active_class_index = 0
             self.plugin.set_default_class(self.plugin.classes[0])
+            self.update_class_selection()
+            
+        # Enable brush tool button
+        if hasattr(self, 'brush_btn'):
+            self.brush_btn.setEnabled(True)
             
         QMessageBox.information(self, "Success", "Toolbar created successfully!")
-        self.close()
         
     def clear_toolbar(self):
         self.plugin.cleanup_toolbar()
         self.plugin.current_layer = None
-        self.plugin.classes = []  # Clear the classes list
-        self.class_list.clear()   # Clear the UI list
+        self.plugin.classes.clear()
+        self.plugin.active_class_index = 0
+        self.class_list.clear()
+        # Disable brush tool button
+        if hasattr(self, 'brush_btn'):
+            self.brush_btn.setEnabled(False)
         QMessageBox.information(self, "Info", "Toolbar and classes cleared!")
