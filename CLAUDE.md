@@ -6,6 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a QGIS plugin called "Class Labeler" that provides dynamic class management with hotkeys for labeling vector features. The plugin allows users to create toolbars with numbered hotkeys (1-9) for quickly setting class values on polygon features, with optional brush tool integration for drawing.
 
+## Recent Improvements
+
+### Robust Class Management (2025)
+- **Fixed class deletion bug**: Classes can now be deleted regardless of field name changes or toolbar state
+- **Decoupled operations**: Class management is independent of field/toolbar validation
+- **Better error handling**: Field operations only occur when actually needed
+
+### Clean UI Integration (2025)
+- **Removed redundant toolbar**: Brush tool no longer creates its own toolbar in main QGIS interface
+- **Streamlined access**: Brush functionality only available through dock widget button
+- **Proper cleanup**: Fixed memory leaks and duplicate icon accumulation during plugin reloads
+
 ## Architecture
 
 ### Core Components
@@ -19,6 +31,7 @@ This is a QGIS plugin called "Class Labeler" that provides dynamic class managem
 - `DrawByBrush`: Integrates brush drawing functionality with class labeling
 - Takes optional callbacks for getting current class value and field name
 - Handles feature creation with automatic class attribute assignment
+- No longer creates standalone toolbar - accessed only through dock widget
 
 **brushtools.py** - Low-level brush drawing tool
 - `BrushTool`: Custom QgsMapTool for brush-based polygon drawing
@@ -78,6 +91,8 @@ git commit -m "descriptive message"
 - Integrates with class labeler through callback functions
 - Supports drawing, erasing, and merging operations
 - Brush properties: size (scroll+shift), rotation (scroll+ctrl+shift), shape (tab)
+- Accessed exclusively through dock widget button (no main toolbar integration)
+- Proper lifecycle management prevents duplicate instances
 
 ### Field Management
 - Creates text fields for class attributes

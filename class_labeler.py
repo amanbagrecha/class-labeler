@@ -38,7 +38,10 @@ class ClassLabelerPlugin:
             if self.active_class_index >= len(self.classes):
                 self.active_class_index = max(0, len(self.classes) - 1)
             self.create_toolbar()
-            if self.classes and self.active_class_index < len(self.classes):
+            # Only set default class if we have a valid layer and field
+            if (self.classes and self.active_class_index < len(self.classes) and 
+                self.get_target_layer() and 
+                self.get_target_layer().fields().indexFromName(self.class_field) != -1):
                 self.set_default_class(self.classes[self.active_class_index])
             return
 
@@ -77,8 +80,9 @@ class ClassLabelerPlugin:
             self.toolbar = None
         if hasattr(self, 'actions'):
             self.actions = []
-        # Clean up brush tool
+        # Clean up brush tool properly
         if hasattr(self, 'brush_tool') and self.brush_tool:
+            self.brush_tool.unload()
             self.brush_tool = None
             
     def show_dock(self):
@@ -352,7 +356,9 @@ class ClassLabelerDockWidget(QgsDockWidget):
         if current_row >= 0:
             self.plugin.classes.pop(current_row)
             self.class_list.takeItem(current_row)
-            self.plugin.refresh_toolbar()
+            # Only refresh toolbar if it exists
+            if hasattr(self.plugin, 'toolbar') and self.plugin.toolbar:
+                self.plugin.refresh_toolbar()
             
     def on_class_selected(self, item):
         row = self.class_list.row(item)
