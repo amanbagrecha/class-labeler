@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="class_labeler.png" alt="Class Labeler Logo" width="150"/>
+</p>
+
+
+
 # Class Labeler for QGIS
 
 **A QGIS plugin that lets you classify and label vector features with dynamic hotkeys and integrated brush tools.**
