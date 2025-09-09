@@ -234,13 +234,46 @@ class DrawByBrush:
         self.pluginIsActive = False
 
     def unload(self):
-        """Remove the plugin menu item and icon from QGIS GUI."""
+        """Remove the plugin menu item and icon from QGIS GUI and reset state."""
+        canvas = self.iface.mapCanvas() if hasattr(self.iface, 'mapCanvas') else None
+        try:
+            if canvas and self.tool and canvas.mapTool() == self.tool:
+                if self.previous_tool:
+                    canvas.setMapTool(self.previous_tool)
+                else:
+                    canvas.setMapTool(None)
+        except Exception:
+            pass
+
+        try:
+            self.iface.currentLayerChanged.disconnect(self.get_active_layer)
+        except Exception:
+            pass
+        try:
+            self.iface.currentLayerChanged.disconnect(self.brush_action_requirements_check)
+        except Exception:
+            pass
+        try:
+            self.brush_action.toggled.disconnect()
+        except Exception:
+            pass
+
         for action in self.actions:
             self.iface.removePluginMenu(
                 self.tr(u'Draw by Brush'),
                 action)
             self.iface.removeToolBarIcon(action)
         # No toolbar to remove since we don't create one
+
+        self.actions = []
+        self.tool = None
+        self.previous_tool = None
+        self.active_layer = None
+        self.pluginIsActive = False
+        try:
+            self.sb.clearMessage()
+        except Exception:
+            pass
 
     #------------------------------ UPPDATE STATE -----------------------------
     def add_action(
