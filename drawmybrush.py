@@ -334,6 +334,13 @@ class DrawByBrush:
         # Get current active layer used in the drawing tool
         self.active_layer = self.tool.active_layer
 
+        # Require layer to already be in edit mode
+        if not self.active_layer.isEditable():
+            self.iface.messageBar().pushWarning(
+                "Brush", "Target layer is not editable. Enable editing mode to draw."
+            )
+            return
+
         # Create new feature
         new_feature = QgsFeature(self.active_layer.fields())
         new_feature.setGeometry(emmitted_geometry)
@@ -363,8 +370,6 @@ class DrawByBrush:
                     self.active_layer.deleteFeature(f.id())
             
             # Wrap in edit command for proper undo/redo support
-            if not self.active_layer.isEditable():
-                self.active_layer.startEditing()
             self.active_layer.beginEditCommand("Brush add")
             ok = self.active_layer.addFeature(new_feature)
             if not ok:

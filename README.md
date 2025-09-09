@@ -67,6 +67,8 @@ With your toolbar active, classification becomes effortless:
 
 Activate the brush tool for photoshop-style polygon creation:
 
+**Note:** The brush tool requires the target layer to be in editing mode. If the layer isn't editable, drawing will warn and abort.
+
 - **Left-click + drag**: Paint polygons
 - **Right-click + drag**: Erase areas
 - **Shift + scroll**: Adjust brush size
