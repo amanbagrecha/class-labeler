@@ -60,6 +60,8 @@ class ClassLabelerPlugin:
     def initGui(self):
         icon = QIcon()
         self.action = QAction(icon, "Class Labeler", self.iface.mainWindow())
+        # Make the action checkable so the checked state reflects dock visibility
+        self.action.setCheckable(True)
         self.action.triggered.connect(self.show_dock)
         self.iface.addToolBarIcon(self.action)
         
@@ -85,12 +87,30 @@ class ClassLabelerPlugin:
             self.brush_tool.unload()
             self.brush_tool = None
             
-    def show_dock(self):
+    def show_dock(self, checked=False):
+        """Toggle the dock widget visibility.
+
+        Creates the dock widget on first use. Subsequent calls toggle its
+        visibility and keep the action's checked state in sync with the dock
+        visibility.
+        """
         if not self.dock_widget:
             self.dock_widget = ClassLabelerDockWidget(self)
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
+            # Synchronize action state when dock is closed independently
+            try:
+                self.dock_widget.visibilityChanged.connect(self.action.setChecked)
+            except Exception:
+                pass
+
+        if self.dock_widget.isVisible():
+            self.dock_widget.hide()
         else:
             self.dock_widget.show()
+
+        # Update action checked state to reflect dock visibility
+        if hasattr(self, 'action') and self.action:
+            self.action.setChecked(self.dock_widget.isVisible())
         
     def create_toolbar(self):
         self.cleanup_toolbar()
