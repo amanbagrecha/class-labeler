@@ -14,7 +14,18 @@ Class Labeler is a QGIS plugin for labeling polygons or images for segmentation 
 - Switch classes instantly with number key hotkeys
 - Works with standard QGIS editing tools and existing layers
 
+
+**Note:** The brush tool requires the target layer to be in editing mode. If the layer isn't editable, drawing will warn and abort.
+
+- **Left-click + drag**: Paint polygons
+- **Right-click + drag**: Erase areas
+- **Shift + scroll**: Adjust brush size
+- **Ctrl + Shift + scroll**: Rotate brush
+- **Tab**: Cycle through brush shapes
+- **Ctrl while drawing**: Merge with existing features
+=======
 ## Demo
+
 
 [Watch a short demo video](https://samplelib.com/lib/preview/mp4/sample-5s.mp4)
 
