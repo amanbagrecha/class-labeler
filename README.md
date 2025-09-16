@@ -23,11 +23,12 @@ Class Labeler is a QGIS plugin for labeling polygons or images for segmentation 
 - **Ctrl + Shift + scroll**: Rotate brush
 - **Tab**: Cycle through brush shapes
 - **Ctrl while drawing**: Merge with existing features
-=======
+
 ## Demo
 
+![Class Labeler Screenshot](screenshot_1.jfif)
 
-[Watch a short demo video](https://samplelib.com/lib/preview/mp4/sample-5s.mp4)
+[Watch the demo video](12-19-36-Clip20250909122124.mp4)
 
 ## Installation
 

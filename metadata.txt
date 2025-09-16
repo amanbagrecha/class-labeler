@@ -5,11 +5,13 @@ description=Dynamic class management with hotkeys for labeling and integrated br
 version=1.0
 author=Aman Bagrecha
 email=amanbagrecha.blr@gmail.com
-about=Class Labeler is a QGIS plugin for efficient labeling and classification of vector features using hotkeys and brush-based drawing tools. 
-       It integrates and extends the Draw-By-Brush project by Joseph Burkhart (https://github.com/josephburkhart/Draw-By-Brush), 
+about=Class Labeler is a QGIS plugin for efficient labeling and classification of vector features using hotkeys and brush-based drawing tools.
+       It integrates and extends the Draw-By-Brush project by Joseph Burkhart (https://github.com/josephburkhart/Draw-By-Brush),
        with modifications for QGIS compatibility, bug fixes, and workflow enhancements.
 category=Vector
+tags=classification, segmentation, labeling, annotation, brush tools, machine learning, training data, hotkeys, digitizing, object detection
 tracker=https://github.com/amanbagrecha/class-labeler/issues
 repository=https://github.com/amanbagrecha/class-labeler
 homepage=https://github.com/amanbagrecha/class-labeler
 license=GPL-3.0
+icon=class_labeler.png

@@ -58,7 +58,9 @@ class ClassLabelerPlugin:
         return self.class_field
 
     def initGui(self):
-        icon = QIcon()
+        # Load the plugin icon
+        icon_path = os.path.join(os.path.dirname(__file__), 'class_labeler.png')
+        icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
         self.action = QAction(icon, "Class Labeler", self.iface.mainWindow())
         # Make the action checkable so the checked state reflects dock visibility
         self.action.setCheckable(True)
