@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="class_labeler.png" alt="Class Labeler Logo" width="150"/>
+  <img src="class_labeler/class_labeler.png" alt="Class Labeler Logo" width="150"/>
 </p>
 
 # Class Labeler for QGIS
@@ -26,15 +26,28 @@ Class Labeler is a QGIS plugin for labeling polygons or images for segmentation 
 
 ## Demo
 
-![Class Labeler Screenshot](screenshot_1.jfif)
+![Class Labeler Screenshot](assets/media/screenshot_1.jfif)
 
-[Watch the demo video](12-19-36-Clip20250909122124.mp4)
+[Watch the demo video](assets/media/12-19-36-Clip20250909122124.mp4)
 
 ## Installation
 
-1. Copy plugin files to your QGIS profile's plugins directory
+1. Copy the `class_labeler` plugin folder to your QGIS profile's plugins directory
 2. Enable **Class Labeler** in the QGIS Plugin Manager
 3. Open the dock widget or toolbar to start labeling
+
+## Release publishing
+
+This repository includes a GitHub Actions workflow that packages the plugin and
+publishes it to the official QGIS plugin repository whenever a GitHub release
+is published. Before triggering a release, configure the following secrets in
+your GitHub repository settings:
+
+- `QGIS_PLUGIN_REPO_USERNAME`
+- `QGIS_PLUGIN_REPO_PASSWORD`
+
+These credentials correspond to your QGIS plugin repository account and are
+used by the workflow to authenticate when uploading the packaged plugin.
 
 ## Usage
 

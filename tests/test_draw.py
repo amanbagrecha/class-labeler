@@ -52,10 +52,11 @@ sys.modules.setdefault("qgis.core", core)
 
 # Now import the module under test within a fake package to satisfy relative imports
 root = os.path.dirname(os.path.dirname(__file__))
+plugin_root = os.path.join(root, "class_labeler")
 sys.path.insert(0, root)
 
 pkg = types.ModuleType("class_labeler")
-pkg.__path__ = [root]
+pkg.__path__ = [plugin_root]
 sys.modules.setdefault("class_labeler", pkg)
 sys.modules.setdefault("class_labeler.resources", types.ModuleType("resources"))
 brushtools_mod = types.ModuleType("brushtools")
@@ -63,7 +64,9 @@ brushtools_mod.BrushTool = type("BrushTool", (), {})
 sys.modules.setdefault("class_labeler.brushtools", brushtools_mod)
 
 import importlib.util
-spec = importlib.util.spec_from_file_location("class_labeler.drawmybrush", os.path.join(root, "drawmybrush.py"))
+spec = importlib.util.spec_from_file_location(
+    "class_labeler.drawmybrush", os.path.join(plugin_root, "drawmybrush.py")
+)
 drawmybrush = importlib.util.module_from_spec(spec)
 sys.modules.setdefault("class_labeler.drawmybrush", drawmybrush)
 spec.loader.exec_module(drawmybrush)
