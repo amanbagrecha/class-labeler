@@ -86,6 +86,15 @@ class ClassLabelerPlugin:
             self.actions = []
         # Clean up brush tool properly
         if hasattr(self, 'brush_tool') and self.brush_tool:
+            try:
+                canvas = self.iface.mapCanvas()
+                current_tool = canvas.mapTool()
+                brush_map_tool = getattr(self.brush_tool, 'tool', None)
+                if brush_map_tool and current_tool == brush_map_tool:
+                    previous = getattr(self.brush_tool, 'previous_tool', None)
+                    canvas.setMapTool(previous) if previous else canvas.setMapTool(None)
+            except Exception:
+                pass
             self.brush_tool.unload()
             self.brush_tool = None
             
